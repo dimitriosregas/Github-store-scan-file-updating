@@ -1,1 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Scanner & Dropbox Sync</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f4f9; color: #333; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #0061fe; }
+        button { background: #0061fe; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 15px; }
+        button:hover { background: #004ecc; }
+        input[type="text"] { width: 100%; padding: 12px; font-size: 16px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px; }
+        .log-box { background: #eee; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 14px; height: 100px; overflow-y: auto; margin-bottom: 15px; }
+        .result-box { padding: 15px; background: #eef6ff; border-left: 5px solid #0061fe; font-size: 18px; font-weight: bold; border-radius: 0 4px 4px 0; }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <h2>Store Scanner & Dropbox Sync</h2>
+    
+    <!-- Sync Section -->
+    <button onclick="syncDropboxFile()">Sync / Download PLU Data from Dropbox</button>
+    <div id="logBox" class="log-box">Status: Ready. Tap sync to load your database.</div>
+
+    <!-- Barcode Scan Input Section -->
+    <label for="barcodeInput"><strong>Scan / Enter Barcode:</strong></label>
+    <input type="text" id="barcodeInput" placeholder="Scan barcode here..." onkeypress="handleScan(event)">
+
+    <!-- Result Display -->
+    <div id="resultBox" class="result-box">Item Details: [Waiting for scan]</div>
+</div>
+
+<script>
+    // CONFIGURATION: Insert your Dropbox Access Token here
+    const DROPBOX_ACCESS_TOKEN = "YOUR_DROPBOX_ACCESS_TOKEN_HERE";
+    const DROPBOX_FILE_PATH = "/Regasshell Team Folder/upc PLU codes to forward to other locations/your_data_file.txt";
+    
+    let pluDatabase = {};
+
+    async function syncDropboxFile() {
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML = "Connecting to Dropbox...";
+
+        if (DROPBOX_ACCESS_TOKEN === "YOUR_DROPBOX_ACCESS_TOKEN_HERE") {
+            logBox.innerHTML = "Error: Please update your DROPBOX_ACCESS_TOKEN in the script.";
+            return;
+        }
+
+        try {
+            // Dropbox API call to download file content via fetch
+            const response = await fetch("https://content.dropboxapi.com/2/files/download", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${DROPBOX_ACCESS_TOKEN}`,
+                    "Dropbox-API-Arg": JSON.stringify({ "path": DROPBOX_FILE_PATH })
+                }
+            });
+
+            if (response.ok) {
+                const fileContent = await response.text();
+                parsePluData(fileContent);
+                logBox.innerHTML = `Success! Loaded items from Dropbox into local memory.`;
+            } else {
+                const errText = await response.text();
+                logBox.innerHTML = `Download Failed (${response.status}): ${errText}`;
+            }
+        } catch (error) {
+            logBox.innerHTML = `Network Error: ${error.message}`;
+        }
+    }
+
+    function parsePluData(content) {
+        pluDatabase = {};
+        const lines = content.split(/\r?\n/);
+        
+        lines.forEach(line => {
+            // Assuming comma-separated format: UPC, Item Name, Price
+            const parts = line.split(',');
+            if (parts.length >= 2) {
+                const upc = parts[0].trim();
+                const details = parts.slice(1).join(',').trim();
+                pluDatabase[upc] = details;
+            }
+        });
+    }
+
+    function handleScan(event) {
+        if (event.key === 'Enter') {
+            const inputField = document.getElementById('barcodeInput');
+            const code = inputField.value.trim();
+            const resultBox = document.getElementById('resultBox');
+
+            if (!code) return;
+
+            if (pluDatabase[code]) {
+                resultBox.innerHTML = `<span style="color: green;">Found:</span> ${pluDatabase[code]}`;
+            } else {
+                resultBox.innerHTML = `<span style="color: red;">Unknown Barcode:</span> ${code}`;
+            }
+
+            // Clear input field for the next scan
+            inputField.value = "";
+        }
+    }
+</script>
+
+</body>
+</html>
